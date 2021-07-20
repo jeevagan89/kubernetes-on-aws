@@ -1,0 +1,100 @@
+global:
+  name: consul
+  imagePullSecrets:
+    - name: dockerhub-credentials
+  datacenter: primary-dc
+  gossipEncryption:
+    secretName: consul-gossip-encryption-key
+    secretKey: key
+  tls:
+    enabled: true
+    enableAutoEncrypt: true
+  metrics:
+    enabled: true
+    enableGatewayMetrics: true
+    agentMetricsRetentionTime: "1m"
+  acls:
+    manageSystemACLs: true
+# Use the correct envoyproxy image based on this compatibility matrix
+# https://www.consul.io/docs/connect/proxies/envoy#supported-versions
+  imageEnvoy: "envoyproxy/envoy-alpine:v1.18.3"
+
+server:
+# It is recommended to upgrade Consul server first and then client. To support this,
+# we maintain server and client images separately
+  image: "hashicorp/consul:1.10.0"
+# The minimum recommended server replicas are 3 for a production cluster.
+# More details - https://www.consul.io/docs/architecture/consensus#deployment-table
+  replicas: 3
+  disruptionbudget:
+    maxunavailable: 1
+  storageClass: "efs-consul"
+  resources:
+    requests:
+      memory: '100Mi'
+      cpu: '100m'
+    limits:
+      memory: '500Mi'
+      cpu: '500m'
+  extraConfig: |
+    {
+      "skip_leave_on_interrupt": false,
+      "leave_on_terminate": true,
+      "rejoin_after_leave": true
+    }
+
+client:
+# It is recommended to upgrade Consul server first and then client. To support this,
+# we maintain server and client images separately
+  image: "hashicorp/consul:1.10.0"
+  updateStrategy: |
+    rollingUpdate:
+      maxUnavailable: 1
+    type: RollingUpdate
+  extraConfig: |
+    {
+      "skip_leave_on_interrupt": false
+    }
+
+ui:
+  enabled: true
+  service:
+    enabled: true
+    type: ClusterIP
+  ingress:
+    enabled: true
+    hosts:
+      - host: <INSERT YOUR URL HERE>
+        paths:
+          - /
+          - /*
+    annotations: |
+      kubernetes.io/ingress.class: alb
+      external-dns.alpha.kubernetes.io/alias: "true"
+      external-dns.alpha.kubernetes.io/ttl: "60"
+      alb.ingress.kubernetes.io/scheme: "internal"
+      alb.ingress.kubernetes.io/group.name: "eks.default"
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+      alb.ingress.kubernetes.io/backend-protocol: HTTPS
+      alb.ingress.kubernetes.io/certificate-arn: "<INSERT ACM CERT ARN HERE>"
+      alb.ingress.kubernetes.io/healthcheck-path: "/v1/status/leader"
+      alb.ingress.kubernetes.io/tags: "APP=Consul"
+
+# If you want to enable catalog sync process to sync K8S with Consul services.
+syncCatalog:
+  enabled: true
+  tok8s: false
+  k8sDenyNamespaces:
+    - "kube-system"
+    - "consul"
+
+# If you want to enable automatic Connect sidecar injector
+connectInject:
+  enabled: true
+  k8sDenyNamespaces:
+    - "kube-system"
+    - "consul"
+
+controller:
+  enabled: true

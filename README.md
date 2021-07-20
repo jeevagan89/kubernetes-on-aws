@@ -1,1 +1,1 @@
-# kubernetes-on-aws
+Documentation for deploying various applications on Amazon Elastic Kubernetes Service (Amazon EKS)
