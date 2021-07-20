@@ -1,0 +1,60 @@
+global:
+  enabled: true
+  imagePullSecrets:
+    - name: dockerhub-credentials
+
+server:
+  image:
+    repository: "hashicorp/vault"
+    tag: "1.7.3"
+  updateStrategyType: "RollingUpdate"
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 250m
+    limits:
+      memory: 256Mi
+      cpu: 250m
+  
+  serviceAccount:
+    name: "vault-sa"
+    annotations:
+      eks.amazonaws.com/role-arn: <INSERT IAM ROLE ARN>
+
+  ha:
+    enabled: true
+    replicas: 3
+    disruptionBudget:
+      enabled: true
+      maxUnavailable: 1
+    config: |
+      ui = true
+      listener "tcp" {
+        tls_disable = 1
+        address = "[::]:8200"
+        cluster_address = "[::]:8201"
+      }
+      storage "consul" {
+        path = "vault"
+        address = "HOST_IP:8501"
+      }
+
+# Vault UI
+ui:
+  enabled: true
+  serviceType: "ClusterIP"
+  serviceNodePort: null
+  externalPort: 8200
+  targetPort: 8200
+  annotations: |
+    kubernetes.io/ingress.class: alb
+    external-dns.alpha.kubernetes.io/alias: "true"
+    external-dns.alpha.kubernetes.io/ttl: "60"
+    alb.ingress.kubernetes.io/scheme: "internal"
+    alb.ingress.kubernetes.io/group.name: "eks.default"
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/backend-protocol: HTTPS
+    alb.ingress.kubernetes.io/certificate-arn: "<INSERT ACM CERT ARN HERE>"
+    alb.ingress.kubernetes.io/healthcheck-path: "/v1/sys/health?standbyok=true"
+    alb.ingress.kubernetes.io/tags: "<INSERT YOUR AWS TAGS HERE>"
